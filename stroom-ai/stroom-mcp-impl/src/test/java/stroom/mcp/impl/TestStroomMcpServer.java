@@ -148,7 +148,9 @@ class TestStroomMcpServer {
                 tool("search_write", AiToolCategory.SEARCH, false, false, false),
                 tool("admin_thing", AiToolCategory.ADMINISTRATION, true, false, false),
                 tool("slow_thing", AiToolCategory.CORE, true, false, false),
-                tool("asking_search", AiToolCategory.SEARCH, true, false, true));
+                tool("asking_search", AiToolCategory.SEARCH, true, false, true),
+                // A real one: the bundled UI catalogue's lookup, as PortedToolsModule binds it.
+                uiLookup());
         Mockito.when(builtInTools.tools()).thenReturn(tools);
         Mockito.when(builtInTools.tool(Mockito.anyString())).thenAnswer(invocation -> tools.stream()
                 .filter(tool -> tool.definition().name().equals(invocation.getArgument(0)))
@@ -212,13 +214,13 @@ class TestStroomMcpServer {
             // are refused, saying why), and no tool to approve a call with an id: there are no approval ids.
             assertThat(client.listTools().tools()).extracting(Tool::name)
                     .containsExactlyInAnyOrder("read_thing", "write_thing", "confirmed_write", "build_write",
-                            "dry_write", "search_thing", "slow_thing", "asking_search")
+                            "dry_write", "search_thing", "slow_thing", "asking_search", "ui_lookup")
                     .doesNotContain("approve_call");
         }
         try (final McpSyncClient client = client(true, request -> new ElicitResult(Action.ACCEPT, Map.of()))) {
             assertThat(client.listTools().tools()).extracting(Tool::name)
                     .containsExactlyInAnyOrder("read_thing", "write_thing", "confirmed_write", "build_write",
-                            "dry_write", "search_thing", "slow_thing", "asking_search");
+                            "dry_write", "search_thing", "slow_thing", "asking_search", "ui_lookup");
             final Tool write = client.listTools().tools().stream()
                     .filter(tool -> tool.name().equals("write_thing"))
                     .findFirst()
@@ -643,7 +645,7 @@ class TestStroomMcpServer {
                 return !told.isEmpty();
             });
             assertThat(told.getLast()).extracting(Tool::name).containsExactly("read_thing", "dry_write",
-                    "slow_thing");
+                    "slow_thing", "ui_lookup");
         }
     }
 
@@ -666,6 +668,32 @@ class TestStroomMcpServer {
             assertThat(text(client.readResource(new ReadResourceRequest("stroom://guides"))).text())
                     .startsWith("# Guides\n\n- `stroom://guide/agent-instructions`: ")
                     .contains("- `stroom://guide/xslt`: ");
+        }
+    }
+
+    @Test
+    void theUiLookupIsListedAndCalledLikeAnyToolAndItsGuideIsAResource() {
+        try (final McpSyncClient client = client(false, null)) {
+            final Tool lookup = client.listTools().tools().stream()
+                    .filter(tool -> tool.name().equals("ui_lookup"))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(lookup.annotations().readOnlyHint()).isTrue();
+            assertThat(lookup.description()).contains("interface only");
+            assertThat(lookup.inputSchema()).containsEntry("type", "object");
+
+            final CallToolResult result = client.callTool(new CallToolRequest("ui_lookup",
+                    Map.of("question", "Enter Stepping Mode")));
+            assertThat(result.isError()).isNotEqualTo(Boolean.TRUE);
+            assertThat(text(result)).contains("\"label\":\"Enter Stepping Mode\"", "\"verified_against\"",
+                    "\"coverage\"");
+
+            assertThat(client.listResources().resources()).extracting(Resource::uri).contains("stroom://guide/ui");
+            final TextResourceContents ui = text(client.readResource(new ReadResourceRequest("stroom://guide/ui")));
+            assertThat(ui.mimeType()).isEqualTo("text/markdown");
+            assertThat(ui.text()).isEqualTo(UiCatalogue.bundled().rendered());
+            assertThat(text(client.readResource(new ReadResourceRequest("stroom://guides"))).text())
+                    .contains("- `stroom://guide/ui`: Stroom UI labels");
         }
     }
 
@@ -826,6 +854,14 @@ class TestStroomMcpServer {
             assertThat(System.currentTimeMillis()).as("waited too long").isLessThan(deadline);
             Thread.sleep(200);
         }
+    }
+
+    // The UI lookup, made as PortedToolsModule binds it.
+    private static StroomTool uiLookup() {
+        return new EveryTool().tools().stream()
+                .filter(tool -> tool.definition().name().equals("ui_lookup"))
+                .findFirst()
+                .orElseThrow();
     }
 
     private static String text(final CallToolResult result) {

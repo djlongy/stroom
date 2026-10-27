@@ -120,6 +120,7 @@ public final class ToolSummaries {
             Map.entry("survey_feed", "Samples a feed's streams over its lifetime, grouping events by kind."),
             Map.entry("table", "Filters, groups and aggregates a table."),
             Map.entry("task_list", "Keeps a task list that the user sees while the agent works."),
+            Map.entry("ui_lookup", "Describes Stroom's interface: labels, where they are and when they show."),
             Map.entry("update_pipeline", "Changes a pipeline the build created."),
             Map.entry("upload_sample", "Onboarding: sends sample data to a feed."),
             Map.entry("validate_stroomql", "Checks a StroomQL query without running it."),

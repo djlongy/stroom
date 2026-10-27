@@ -39,6 +39,7 @@ public class PortedToolsModule extends AbstractModule {
                 .addBinding(FindPipelineTemplatesTool.class)
                 .addBinding(DescribeTemplateTool.class)
                 .addBinding(DescribeFeedTool.class)
+                .addBinding(UiLookupTool.class)
                 .addBinding(FindReferenceDataTool.class)
                 .addBinding(FindElasticClustersTool.class)
                 .addBinding(SummariseStreamsTool.class)

@@ -42,7 +42,10 @@ public class BundledKnowledge implements AgentKnowledge {
 
     /// Where the files are on the classpath.
     static final String ROOT = "/stroom/mcp/impl/knowledge/";
-    /// The guides, by name: each is `guides/<name>.md`.
+    /// The guide that is rendered from data rather than kept as Markdown: the Stroom UI catalogue ([UiCatalogue]).
+    static final String UI_GUIDE = "ui";
+    /// The guides, by name: each is `guides/<name>.md`, except [#UI_GUIDE], which is rendered from
+    /// `ui/ui-catalogue.json`.
     static final List<String> GUIDES = List.of(
             "agent-instructions",
             "cef",
@@ -52,6 +55,7 @@ public class BundledKnowledge implements AgentKnowledge {
             "indexing",
             "json-input",
             "reference-data",
+            UI_GUIDE,
             "xslt");
     /// The field convention profiles, by name: each is `conventions/<name>.yaml`.
     static final List<String> CONVENTIONS = List.of("ecs", "stroom-flat");
@@ -81,8 +85,14 @@ public class BundledKnowledge implements AgentKnowledge {
         return GUIDES;
     }
 
+    /// @param name A guide's name, e.g. `xslt`.
+    /// @return Its text (Markdown): the file `guides/<name>.md`, or for [#UI_GUIDE] the Stroom UI catalogue rendered
+    /// as Markdown ([UiCatalogue#rendered()]). Empty if there is no guide of that name.
     @Override
     public Optional<String> guide(final String name) {
+        if (UI_GUIDE.equals(name)) {
+            return Optional.of(UiCatalogue.bundled().rendered());
+        }
         return GUIDES.contains(name)
                 ? Optional.of(read("guides/" + name + ".md"))
                 : Optional.empty();
