@@ -49,59 +49,39 @@ class TestUiLookupTool {
     }
 
     @Test
-    void aLabelGivesWhereItIsItsConditionsAndItsSourceLine() {
-        final Map<String, Object> answer = json(call("Add Processor"));
+    void aMenuItemGivesItsMenuPathOwnerIconAndSourceLine() {
+        final Map<String, Object> answer = json(call("Credentials Manager"));
         assertThat(answer).containsEntry("status", "match");
-        final Map<String, Object> entry = first(answer);
-        assertThat(entry)
-                .containsEntry("label", "Add Processor")
-                .containsEntry("kind", "toolbar button tooltip")
-                .containsEntry("screen", "Pipeline editor: Processors tab")
-                .containsEntry("location", "Pipeline editor > Processors tab > processor list toolbar")
-                .containsEntry("tooltip", "Add Processor");
-        assertThat(TestUiLookupTool.<List<String>>cast(entry.get("conditions")))
-                .contains("Needs the Manage Processors permission.");
-        assertThat((String) entry.get("source_evidence"))
-                .startsWith("stroom-core-client/src/main/java/stroom/processor/client/presenter/"
-                            + "ProcessorPresenter.java:");
-        assertThat(TestUiLookupTool.<Map<String, Object>>cast(entry.get("icon_provenance")))
-                .containsEntry("image", "SvgImage.ADD")
-                .containsEntry("file", "add.svg");
-        assertThat(TestUiLookupTool.<Map<String, Object>>cast(entry.get("browser")))
-                .containsEntry("result", "confirmed")
-                .containsEntry("image", "gradata/stroom:v7.14-SNAPSHOT-20261027")
-                .containsEntry("observed_as", "tooltip (title attribute)");
+        assertThat(first(answer))
+                .containsEntry("label", "Credentials Manager")
+                .containsEntry("kind", "menu item")
+                .containsEntry("owner", "stroom.credentials.client.CredentialsPlugin")
+                .containsEntry("location", "Main Menu > Security")
+                .containsEntry("icon", "SvgImage.KEY_BLUE")
+                .doesNotContainKeys("conditions", "screen", "browser", "aliases");
+        assertThat((String) first(answer).get("source"))
+                .startsWith("stroom-core-client/src/main/java/stroom/credentials/client/CredentialsPlugin.java:");
     }
 
     @Test
-    void textBuiltAtRunTimeAndAnUncheckedEntryAreSaid() {
-        final Map<String, Object> feed = entries(json(call("XSL Translation"))).stream()
-                .filter(entry -> "XSL Translation".equals(entry.get("label")))
+    void aToolbarButtonGivesItsTooltipAndIcon() {
+        final Map<String, Object> upload = entries(json(call("the Upload button"))).stream()
+                .filter(entry -> "toolbar button tooltip".equals(entry.get("kind")))
                 .findFirst()
                 .orElseThrow();
-        assertThat(TestUiLookupTool.<Map<String, Object>>cast(feed.get("text_built_at_run_time")))
-                .containsKeys("how", "built_by");
-        final Map<String, Object> unchecked = first(new UiLookupTool(
-                () -> catalogue(List.of(entry("x", "Upload", "Feed editor", "Feed editor", null))), () -> BUILD)
-                .answer("Upload"));
-        assertThat(TestUiLookupTool.<Map<String, Object>>cast(unchecked.get("browser")))
-                .containsEntry("result", "unchecked");
+        assertThat(upload)
+                .containsEntry("label", "Upload")
+                .containsEntry("tooltip", "Upload")
+                .containsEntry("icon", "SvgImage.UPLOAD")
+                .containsEntry("owner", "stroom.data.client.presenter.MetaPresenter");
     }
 
     @Test
-    void aTooltipIsFoundByItsWords() {
-        final Map<String, Object> answer = json(call("what does the button with tooltip Refresh Current Step do"));
-        assertThat(first(answer))
-                .containsEntry("label", "Refresh Current Step")
-                .containsEntry("tooltip", "Refresh Current Step")
-                .containsEntry("screen", "Stepping");
-    }
-
-    @Test
-    void aScreensTabsAreListed() {
+    void aClassesTabsAreListed() {
         final Map<String, Object> answer = json(call("what tabs does a feed have"));
         final List<Object> tabs = entries(answer).stream()
-                .filter(entry -> "tab".equals(entry.get("kind")) && "Feed editor".equals(entry.get("screen")))
+                .filter(entry -> "tab".equals(entry.get("kind"))
+                                 && "stroom.feed.client.presenter.FeedPresenter".equals(entry.get("owner")))
                 .map(entry -> entry.get("label"))
                 .toList();
         assertThat(tabs).containsExactlyInAnyOrder("Settings", "Data", "Active Tasks", "Documentation",
@@ -110,7 +90,7 @@ class TestUiLookupTool {
 
     @Test
     void nothingFoundSaysItIsUnknownNotAbsent() {
-        final Map<String, Object> answer = json(call("Pipeline Designer toolbar"));
+        final Map<String, Object> answer = json(call("Zebra Quokka Wombat"));
         assertThat(answer).containsEntry("status", "no_match").containsEntry("matched", 0);
         assertThat(entries(answer)).isEmpty();
         assertThat((String) answer.get("hint")).contains("unknown");
@@ -121,15 +101,16 @@ class TestUiLookupTool {
     void oneLabelInSeveralPlacesIsAmbiguous() {
         final Map<String, Object> answer = json(call("Active Tasks"));
         assertThat(answer).containsEntry("status", "ambiguous");
-        assertThat(entries(answer)).extracting(entry -> entry.get("screen"))
-                .containsExactlyInAnyOrder("Feed editor", "Pipeline editor");
+        assertThat(entries(answer)).extracting(entry -> entry.get("owner"))
+                .contains("stroom.feed.client.presenter.FeedPresenter",
+                        "stroom.pipeline.client.presenter.PipelinePresenter");
     }
 
     @Test
     void atMostEightAreGivenAndHowManyMoreIsSaid() {
         final List<Map<String, Object>> entries = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
-            entries.add(entry("e" + i, "Settings", "Screen " + i, "Screen " + i + " > tab bar", null));
+            entries.add(entry("e" + i, "Settings", "a.Screen" + i, null, null));
         }
         final Map<String, Object> answer = new UiLookupTool(() -> catalogue(entries), () -> BUILD)
                 .answer("Settings");
@@ -138,26 +119,24 @@ class TestUiLookupTool {
                 .containsEntry("omitted", 4);
         assertThat(entries(answer)).hasSize(UiLookupTool.MAX_RESULTS);
         // Best first, then in the catalogue's order.
-        assertThat(entries(answer)).extracting(entry -> entry.get("screen")).startsWith("Screen 0", "Screen 1");
+        assertThat(entries(answer)).extracting(entry -> entry.get("owner")).startsWith("a.Screen0", "a.Screen1");
     }
 
     @Test
-    void provenanceSaysWhatTheCatalogueWasReadFromAndWhatIsRunning() {
+    void provenanceGivesTheFingerprintSaysThereIsNoShaAndWhatIsRunning() {
         final Map<String, Object> provenance = cast(json(call("Upload")).get("provenance"));
         assertThat(provenance)
-                .containsEntry("verified_against", UiCatalogue.bundled().verifiedAgainst())
+                .containsEntry("source_fingerprint", UiCatalogue.bundled().provenance().sourceFingerprint())
+                .doesNotContainKey("source_sha")
                 .containsEntry("running_build", "v7.14-SNAPSHOT-20261027");
-        assertThat((String) provenance.get("review_method")).contains("Source-reviewed");
-        assertThat((String) provenance.get("conditions_basis")).contains("reviewed from source");
-        assertThat(TestUiLookupTool.<Map<String, Object>>cast(provenance.get("browser_check")))
-                .containsEntry("platform", "linux/amd64")
-                .containsKey("digest");
+        assertThat((String) provenance.get("source_fingerprint")).matches("sha256:[0-9a-f]{64}");
+        assertThat((String) provenance.get("source_sha_note")).contains("No source commit SHA", "not a source SHA");
     }
 
     @Test
     void anOversizedValueIsCutAndTheAnswerKeepsToItsCap() {
         for (final String big : List.of("x".repeat(100_000), "漢".repeat(100_000), "😀".repeat(50_000))) {
-            final Map<String, Object> one = entry("big", "Upload", "Feed editor", big, List.of(big, big));
+            final Map<String, Object> one = entry("big", "Upload", "a.B", big, big);
             final UiLookupTool bounded = new UiLookupTool(() -> catalogue(List.of(one)), () -> BUILD);
             final ToolResult result = bounded.execute(PortedToolCalls.call(UiLookupTool.NAME,
                     "{\"question\":\"Upload\"}"), PortedToolCalls.context());
@@ -172,12 +151,8 @@ class TestUiLookupTool {
     @Test
     void manyLargeEntriesAreLeftOutWholeAndSaid() {
         final List<Map<String, Object>> entries = new ArrayList<>();
-        final List<String> conditions = new ArrayList<>();
-        for (int i = 0; i < 30; i++) {
-            conditions.add("😀".repeat(500));
-        }
         for (int i = 0; i < 8; i++) {
-            entries.add(entry("e" + i, "Upload", "Screen " + i, "Screen " + i, conditions));
+            entries.add(entry("e" + i, "Upload", "a.Screen" + i, "😀".repeat(240), "😀".repeat(240)));
         }
         final Map<String, Object> answer = new UiLookupTool(() -> catalogue(entries), () -> BUILD).answer("Upload");
         assertThat(UiLookupTool.payloadSize(answer)).isLessThanOrEqualTo(UiLookupTool.MAX_PAYLOAD);
@@ -189,16 +164,13 @@ class TestUiLookupTool {
 
     @Test
     void oversizedProvenanceIsCutThenReplacedAndTheAnswerKeepsToItsCap() {
-        final String big = "\u6f22".repeat(5_000);
+        final String big = "漢".repeat(5_000);
         final BuildInfo bigBuild = new BuildInfo(1L, big, 2L);
         // No match, and a match whose one entry is too large to give.
-        final List<String> conditions = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
-            conditions.add("\uD83D\uDE00".repeat(240));
-        }
+        final String huge = "😀".repeat(240);
         final Map<String, List<Map<String, Object>>> cases = Map.of(
                 "Designer", List.of(),
-                "Upload", List.of(entry("big", "Upload", "Feed editor", "Feed editor", conditions)));
+                "Upload", List.of(entry("big", "Upload", "a." + huge, huge, huge)));
         cases.forEach((question, entries) -> {
             final UiLookupTool bounded = new UiLookupTool(() -> catalogue(entries, big), () -> bigBuild);
             final ToolResult result = bounded.execute(PortedToolCalls.call(UiLookupTool.NAME,
@@ -214,43 +186,42 @@ class TestUiLookupTool {
     }
 
     @Test
-    void theGuideCarriesTheSameQualifiersAsTheTool() {
-        final Map<String, Object> one = entry("q", "Execute Query", "Query editor", "Query editor > Query tab toolbar",
-                null);
-        one.put("kind", "toolbar button tooltip");
-        one.put("tooltip", "Stop Query while it runs");
-        one.put("runtime_text", Map.of("how", "Set by the query buttons as the query starts and stops.",
-                "built_by", Map.of("path", "a/QueryButtons.java", "line", 9, "match", "setTitle")));
-        one.put("browser", Map.of("result", "confirmed", "image", "img", "digest", "d", "platform", "linux/amd64",
-                "user", "admin", "date", "2026-10-27", "screen", "Query editor",
-                "observed_as", "tooltip (title attribute)", "note", "Only Execute Query was seen, not Stop Query."));
+    void theGuideCarriesWhatTheToolGives() {
+        final Map<String, Object> one = entry("q", "Execute Query", "a.QueryButtons", "InlineSvgButton",
+                "Run the query");
+        one.put("icon", "SvgImage.PLAY");
+        one.put("group", "Search");
         final UiCatalogue ui = catalogue(List.of(one));
         final Map<String, Object> shown = first(new UiLookupTool(() -> ui, () -> BUILD).answer("Execute Query"));
-        final Map<String, Object> runtime = cast(shown.get("text_built_at_run_time"));
-        final Map<String, Object> browser = cast(shown.get("browser"));
-        assertThat(ui.rendered()).contains((String) shown.get("tooltip"), (String) runtime.get("how"),
-                (String) runtime.get("built_by"), (String) browser.get("result"), (String) browser.get("observed_as"),
-                (String) browser.get("note"), (String) shown.get("source_evidence"));
+        assertThat(ui.rendered()).contains((String) shown.get("label"), (String) shown.get("owner"),
+                (String) shown.get("location"), (String) shown.get("tooltip"), (String) shown.get("icon"),
+                (String) shown.get("group"), (String) shown.get("source"));
     }
 
     @Test
-    void ambiguityCountsEveryMatchAndTellsPlacesByScreenAndLocation() {
-        // The same location on two screens is two places.
+    void ambiguityCountsEveryMatchAndTellsPlacesByOwnerAndLocation() {
+        // The same location in two owners is two places, and so are two locations in one owner.
         assertThat(new UiLookupTool(() -> catalogue(List.of(
-                entry("a", "Settings", "Feed editor", "tab bar", null),
-                entry("b", "Settings", "Index editor", "tab bar", null))), () -> BUILD).answer("Settings"))
+                entry("a", "Settings", "a.Feed", "tab bar", null),
+                entry("b", "Settings", "a.Index", "tab bar", null))), () -> BUILD).answer("Settings"))
+                .containsEntry("status", "ambiguous");
+        assertThat(new UiLookupTool(() -> catalogue(List.of(
+                entry("a", "Settings", "a.Feed", "FormGroup", null),
+                entry("b", "Settings", "a.Feed", "Button", null))), () -> BUILD).answer("Settings"))
                 .containsEntry("status", "ambiguous");
         // Eight given, all one place; the ninth, left out by the count, is another place.
         final List<Map<String, Object>> entries = new ArrayList<>();
         for (int i = 0; i < 8; i++) {
-            entries.add(entry("same" + i, "Settings", "Feed editor", "tab bar", null));
+            entries.add(entry("same" + i, "Settings", "a.Feed", "tab bar", null));
         }
-        entries.add(entry("other", "Settings", "Index editor", "tab bar", null));
+        entries.add(entry("other", "Settings", "a.Index", "tab bar", null));
         final Map<String, Object> answer = new UiLookupTool(() -> catalogue(entries), () -> BUILD).answer("Settings");
         assertThat(answer).containsEntry("omitted", 1).containsEntry("status", "ambiguous");
-        assertThat(entries(answer)).extracting(entry -> entry.get("screen")).containsOnly("Feed editor");
-        // One place only.
-        assertThat(new UiLookupTool(() -> catalogue(entries.subList(0, 2)), () -> BUILD).answer("Settings"))
+        assertThat(entries(answer)).extracting(entry -> entry.get("owner")).containsOnly("a.Feed");
+        // One place only, with no location.
+        assertThat(new UiLookupTool(() -> catalogue(List.of(
+                entry("a", "Settings", "a.Feed", null, null),
+                entry("b", "Settings", "a.Feed", null, null))), () -> BUILD).answer("Settings"))
                 .containsEntry("status", "match");
     }
 
@@ -287,39 +258,38 @@ class TestUiLookupTool {
         return entries(answer).getFirst();
     }
 
-    private static Map<String, Object> entry(final String id, final String label, final String screen,
-                                             final String location, final List<String> conditions) {
+    private static Map<String, Object> entry(final String id, final String label, final String owner,
+                                             final String location, final String tooltip) {
         final Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("id", id);
+        entry.put("family", "tab");
         entry.put("label", label);
         entry.put("kind", "tab");
-        entry.put("screen", screen);
-        entry.put("location", location);
-        if (conditions != null) {
-            entry.put("conditions", conditions);
+        entry.put("owner", owner);
+        if (location != null) {
+            entry.put("location", location);
         }
-        entry.put("source_evidence", Map.of("path", "a/B.java", "line", 1, "match", label));
+        if (tooltip != null) {
+            entry.put("tooltip", tooltip);
+        }
+        entry.put("source", Map.of("path", "a/B.java", "line", 1));
         return entry;
     }
 
     private static UiCatalogue catalogue(final List<Map<String, Object>> entries) {
-        return UiCatalogue.parse(JsonUtil.writeValueAsString(Map.of(
-                "verified_against", "test",
-                "source", "a test",
-                "review_method", "Made for a test.",
-                "conditions_basis", "Reviewed from source.",
-                "entries", entries), false));
+        return catalogue(entries, "test");
     }
 
     // A catalogue whose provenance values are all the given text.
     private static UiCatalogue catalogue(final List<Map<String, Object>> entries, final String provenance) {
         return UiCatalogue.parse(JsonUtil.writeValueAsString(Map.of(
-                "verified_against", provenance,
-                "source", provenance,
-                "review_method", provenance,
-                "conditions_basis", provenance,
-                "browser_check", Map.of("image", provenance, "digest", provenance, "platform", provenance,
-                        "date", provenance, "user", provenance, "method", provenance, "scope", provenance),
+                "provenance", Map.of(
+                        "generated_by", provenance,
+                        "source_fingerprint", provenance,
+                        "source_files", 1,
+                        "source_sha", provenance,
+                        "source_sha_note", provenance,
+                        "coverage", provenance),
                 "entries", entries), false));
     }
 }

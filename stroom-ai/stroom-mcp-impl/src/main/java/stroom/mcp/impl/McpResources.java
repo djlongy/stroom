@@ -48,6 +48,10 @@ class McpResources {
     static final String GUIDE_DESCRIPTION = "Working guides: event-logging, xslt, data-splitter, json-input, "
                                             + "reference-data, indexing, cef, documentation, agent-instructions, ui.";
     static final String GUIDES_DESCRIPTION = "Index of the working guides.";
+    /// The UI guide's description: it is the whole catalogue, so it is read only on purpose.
+    static final String UI_GUIDE_DESCRIPTION = "Bulk resource, read only on purpose: every label in the Stroom UI "
+                                               + "catalogue, unpaged and unfiltered (size in bytes given). To find a "
+                                               + "label, use the ui_lookup tool, whose answers are bounded.";
     static final String CONVENTION_DESCRIPTION = "A field convention profile.";
 
     private final AgentKnowledge knowledge;
@@ -65,11 +69,15 @@ class McpResources {
                 .mimeType(MARKDOWN)
                 .build());
         for (final String name : knowledge.guideNames()) {
-            resources.add(Resource.builder(GUIDE_PREFIX + name, "guide/" + name)
+            final Resource.Builder guide = Resource.builder(GUIDE_PREFIX + name, "guide/" + name)
                     .title(knowledge.guideTitle(name).orElse(name))
-                    .description("A working guide: " + knowledge.guideTitle(name).orElse(name) + ".")
-                    .mimeType(MARKDOWN)
-                    .build());
+                    .mimeType(MARKDOWN);
+            if (BundledKnowledge.UI_GUIDE.equals(name)) {
+                guide.description(UI_GUIDE_DESCRIPTION).size(UiCatalogue.bundled().renderedBytes());
+            } else {
+                guide.description("A working guide: " + knowledge.guideTitle(name).orElse(name) + ".");
+            }
+            resources.add(guide.build());
         }
         for (final String name : knowledge.conventionNames()) {
             resources.add(Resource.builder(CONVENTION_PREFIX + name, "conventions/" + name)

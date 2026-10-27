@@ -683,12 +683,22 @@ class TestStroomMcpServer {
             assertThat(lookup.inputSchema()).containsEntry("type", "object");
 
             final CallToolResult result = client.callTool(new CallToolRequest("ui_lookup",
-                    Map.of("question", "Enter Stepping Mode")));
+                    Map.of("question", "Credentials Manager")));
             assertThat(result.isError()).isNotEqualTo(Boolean.TRUE);
-            assertThat(text(result)).contains("\"label\":\"Enter Stepping Mode\"", "\"verified_against\"",
+            assertThat(text(result)).contains("\"label\":\"Credentials Manager\"", "\"source_fingerprint\"",
                     "\"coverage\"");
 
-            assertThat(client.listResources().resources()).extracting(Resource::uri).contains("stroom://guide/ui");
+            // The guide is the bulk resource, read only on purpose; nothing else carries it.
+            final Resource guide = client.listResources().resources().stream()
+                    .filter(resource -> resource.uri().equals("stroom://guide/ui"))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(guide.description()).contains("Bulk resource", "ui_lookup");
+            assertThat(guide.size()).isEqualTo(UiCatalogue.bundled().renderedBytes());
+            assertThat(client.listTools().tools()).allSatisfy(tool ->
+                    assertThat(tool.description()).doesNotContain("# Stroom UI labels"));
+            assertThat(text(client.readResource(new ReadResourceRequest("stroom://guides"))).text())
+                    .doesNotContain("# Stroom UI labels");
             final TextResourceContents ui = text(client.readResource(new ReadResourceRequest("stroom://guide/ui")));
             assertThat(ui.mimeType()).isEqualTo("text/markdown");
             assertThat(ui.text()).isEqualTo(UiCatalogue.bundled().rendered());

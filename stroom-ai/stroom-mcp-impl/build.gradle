@@ -69,3 +69,45 @@ dependencies {
     testRuntimeOnly libs.bundles.common.test.runtime
     testRuntimeOnly libs.mysql.connector.java
 }
+
+// The ui_lookup catalogue is generated from the client source at build time (see
+// src/uiCatalogueGenerator). The generator is its own source set, so it is not on the app's classpath, and its
+// output is a main resource, so the jar, the distribution, the image and the tests all get it.
+sourceSets {
+    uiCatalogueGenerator
+}
+
+def uiCatalogueSources = [
+        'stroom-core-client/src/main/java',
+        'stroom-core-client/src/main/resources',
+        'stroom-core-client-widget/src/main/java',
+        'stroom-core-client-widget/src/main/resources',
+        'stroom-core-shared/src/main/java',
+        'stroom-statistics/stroom-statistics-client/src/main/java',
+        'stroom-statistics/stroom-statistics-client/src/main/resources']
+def uiCatalogueDir = layout.buildDirectory.dir('generated/ui-catalogue')
+
+def generateUiCatalogue = tasks.register('generateUiCatalogue', JavaExec) {
+    description = 'Generates the ui_lookup catalogue from the client source.'
+    classpath = sourceSets.uiCatalogueGenerator.runtimeClasspath
+    mainClass = 'stroom.mcp.impl.uicatalogue.UiCatalogueGenerator'
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    def output = uiCatalogueDir.map { it.file('stroom/mcp/impl/knowledge/ui/ui-catalogue.json') }
+    uiCatalogueSources.each { dir ->
+        inputs.files(fileTree(rootProject.file(dir)) { include '**/*.java', '**/*.ui.xml' })
+                .withPathSensitivity(PathSensitivity.RELATIVE)
+                .withPropertyName("sources.${dir}")
+    }
+    inputs.files(sourceSets.uiCatalogueGenerator.runtimeClasspath)
+            .withNormalizer(ClasspathNormalizer)
+            .withPropertyName('generator')
+    outputs.dir(uiCatalogueDir)
+    args = [rootProject.projectDir.absolutePath, output.get().asFile.absolutePath] + uiCatalogueSources
+    doFirst { delete(uiCatalogueDir) }
+}
+
+sourceSets.main.resources.srcDir(generateUiCatalogue)
+
+dependencies {
+    testImplementation sourceSets.uiCatalogueGenerator.output
+}
